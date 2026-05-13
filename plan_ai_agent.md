@@ -148,54 +148,103 @@ graph TD
 fastapi-ai-engine/
 ├── app/
 │   ├── core/
-│   │   ├── config.py          # Settings, env vars
-│   │   ├── database.py        # PostgreSQL connection
-│   │   ├── redis_streams.py   # Event bus client (shared)
-│   │   └── gemini_client.py   # Shared Gemini client
+│   │   ├── config.py              # Settings, env vars (load từ .env)
+│   │   ├── database.py            # PostgreSQL connection (SQLAlchemy engine)
+│   │   ├── redis_streams.py       # Event bus client — publish/consume events (shared)
+│   │   └── gemini_client.py       # Shared Gemini SDK client (gemini-1.5-flash)
 │   │
 │   ├── agents/
-│   │   ├── listing_verifier/  # Agent 1 (đang xây)
-│   │   │   ├── router.py
-│   │   │   ├── nlp_pipeline.py
-│   │   │   ├── vision_pipeline.py
-│   │   │   └── service.py
+│   │   ├── listing_verifier/      # Agent 1 — Kiểm duyệt & chuẩn hóa bất động sản
+│   │   │   ├── prompts.py         # Prompt NLP extraction + Auto-copywriting SEO
+│   │   │   ├── router.py          # FastAPI routes: POST /listings
+│   │   │   ├── nlp_pipeline.py    # Trích xuất thực thể (diện tích, giá, phòng, thú cưng)
+│   │   │   ├── vision_pipeline.py # Auto-tagging ảnh, kiểm tra chất lượng, watermark
+│   │   │   └── service.py         # Orchestration: gọi NLP + Vision → validate → emit event
 │   │   │
-│   │   ├── super_broker/      # Agent 2
-│   │   │   ├── router.py
-│   │   │   ├── intent_extractor.py
-│   │   │   ├── qdrant_service.py
-│   │   │   ├── rag_engine.py
-│   │   │   └── service.py
+│   │   ├── super_broker/          # Agent 2 — Tìm kiếm & tư vấn ngữ cảnh cho khách thuê
+│   │   │   ├── prompts.py         # Prompt intent extraction + RAG reasoning explanation
+│   │   │   ├── router.py          # FastAPI routes: POST /search, POST /schedule
+│   │   │   ├── intent_extractor.py# Parse câu hỏi → constraints (giá, vị trí, thú cưng)
+│   │   │   ├── qdrant_service.py  # Kết nối Qdrant: index listing + vector search
+│   │   │   ├── rag_engine.py      # Reasoning: kết hợp kết quả search + giải thích lý do
+│   │   │   └── service.py         # Orchestration: query → search → reason → respond
 │   │   │
-│   │   ├── smart_concierge/   # Agent 3
-│   │   │   ├── router.py
-│   │   │   ├── triage_engine.py
-│   │   │   ├── dispatcher.py  # Email SMTP
-│   │   │   └── service.py
+│   │   ├── smart_concierge/       # Agent 3 — Quản gia sự cố & điều phối bảo trì
+│   │   │   ├── prompts.py         # Prompt phân loại mức độ nghiêm trọng (URGENT/NORMAL)
+│   │   │   ├── router.py          # FastAPI routes: POST /maintenance, PATCH /tickets/{id}
+│   │   │   ├── triage_engine.py   # Phân loại sự cố + xác định mức độ ưu tiên
+│   │   │   ├── dispatcher.py      # Gửi email thông báo cho kỹ thuật viên (SMTP)
+│   │   │   └── service.py         # Orchestration: triage → assign → sync status → CSAT
 │   │   │
-│   │   └── contract_admin/    # Agent 4
-│   │       ├── router.py
-│   │       ├── billing_engine.py
-│   │       ├── pdf_generator.py
-│   │       ├── vietqr_service.py
-│   │       ├── reconciliation.py
-│   │       ├── dunning.py
-│   │       └── service.py
+│   │   └── contract_admin/        # Agent 4 — Kế toán & hợp đồng tự động
+│   │       ├── prompts.py         # Prompt sinh nội dung email nhắc nợ (lịch sự / cảnh báo)
+│   │       ├── router.py          # FastAPI routes: POST /invoices, POST /webhook/payment
+│   │       ├── billing_engine.py  # Tính hóa đơn: điện + nước + phí quản lý theo hợp đồng
+│   │       ├── pdf_generator.py   # Render PDF hóa đơn đính kèm mã VietQR
+│   │       ├── vietqr_service.py  # Tạo mã QR thanh toán theo chuẩn VietQR
+│   │       ├── reconciliation.py  # Lắng nghe webhook ngân hàng → gạch nợ tự động
+│   │       ├── dunning.py         # Chuỗi nhắc nợ tự động: ngày 3 → 7 → 14
+│   │       └── service.py         # Orchestration: billing cycle + payment flow + report
 │   │
-│   ├── models/                # SQLAlchemy models (shared)
-│   │   ├── listing.py
-│   │   ├── tenant.py
-│   │   ├── invoice.py
-│   │   └── maintenance.py
+│   ├── schemas/                   # Pydantic schemas — validate I/O contract với NestJS & internal agents
+│   │   │
+│   │   ├── schema_verifier.py     # ✅ Agent 1 — Listing Verifier (đã có)
+│   │   │   # INPUT
+│   │   │   # ├── rawListingInput          → Text thô từ NestJS + owner_id + db_apartment_data (đối soát)
+│   │   │   # OUTPUT
+│   │   │   # ├── listingCoreOutput        → title SEO, description chuẩn, price_per_month, status
+│   │   │   # ├── amenityItem              → Tiện nghi phân loại: furniture / building / policy
+│   │   │   # ├── apartmentMetaOutput      → area_m2, floor, room_number, note, amenities[]
+│   │   │   # ├── validationOutput         → score(0-100), data_conflicts, missing_fields, feedback_to_owner
+│   │   │   # ├── listingVerifiedOutput    → Root output: listing + apartment_meta + image_tags + validation
+│   │   │   # └── verifyListingResponse    → HTTP wrapper: {success, data, error}
+│   │   │
+│   │   ├── schema_broker.py       # 🔵 Agent 2 — Super Broker
+│   │   │   # INPUT
+│   │   │   # ├── searchQueryInput         → query (ngôn ngữ tự nhiên), tenant_id, conversation_history[]
+│   │   │   # ├── extractedConstraints     → max_price, min_price, pet_friendly, max_commute_min, districts[]
+│   │   │   # OUTPUT
+│   │   │   # ├── listingMatch             → listing_id, score, reasoning (lý do phù hợp bằng tiếng Việt)
+│   │   │   # ├── searchResultOutput       → top_matches[listingMatch], summary, suggested_schedule_url
+│   │   │   # └── brokerResponse           → HTTP wrapper: {success, data, error}
+│   │   │
+│   │   ├── schema_concierge.py    # 🔧 Agent 3 — Smart Concierge
+│   │   │   # INPUT
+│   │   │   # ├── maintenanceRequestInput  → tenant_id, unit_id, description, image_urls[], reported_at
+│   │   │   # ├── ticketStatusUpdate       → ticket_id, new_status, updated_by, note
+│   │   │   # OUTPUT
+│   │   │   # ├── severityLevel (Enum)     → URGENT | NORMAL
+│   │   │   # ├── ticketStatus (Enum)      → PENDING | ASSIGNED | IN_PROGRESS | COMPLETED
+│   │   │   # ├── triageOutput             → severity, priority_score, classification_reason
+│   │   │   # ├── maintenanceTicketOutput  → ticket_id, severity, assigned_to, status, eta
+│   │   │   # ├── csatSurveyOutput         → ticket_id, rating(1-5), comment, submitted_at
+│   │   │   # └── conciergeResponse        → HTTP wrapper: {success, data, error}
+│   │   │
+│   │   └── schema_admin.py        # 💰 Agent 4 — Contract & Admin
+│   │       # INPUT
+│   │       # ├── utilityReadingInput      → unit_id, month, year, electricity_kwh, water_m3
+│   │       # ├── paymentWebhookInput      → invoice_id, amount, bank_ref, transaction_time, bank_code
+│   │       # OUTPUT
+│   │       # ├── billingItem              → label (Điện/Nước/Phí QL), unit_price, quantity, subtotal
+│   │       # ├── invoiceOutput            → invoice_id, tenant_id, items[], total, due_date, pdf_url, vietqr_payload
+│   │       # ├── dunningStage (Enum)      → REMINDER(day 3) | WARNING(day 7) | ESCALATE(day 14)
+│   │       # ├── reconciliationOutput     → invoice_id, matched, paid_amount, remaining, closed_at
+│   │       # └── adminResponse            → HTTP wrapper: {success, data, error}
 │   │
-│   └── main.py                # FastAPI app entry
+│   ├── models/                    # SQLAlchemy ORM models (shared across agents)
+│   │   ├── listing.py             # Bất động sản: địa chỉ, giá, nội thất, trạng thái
+│   │   ├── tenant.py              # Khách thuê: thông tin cá nhân, hợp đồng liên kết
+│   │   ├── invoice.py             # Hóa đơn: kỳ thanh toán, trạng thái, PDF URL
+│   │   └── maintenance.py         # Ticket bảo trì: mức độ, trạng thái, CSAT score
+│   │
+│   └── main.py                    # FastAPI app entry — mount tất cả agent routers
 │
 ├── workers/
-│   ├── stream_consumer.py     # Redis Streams consumer worker
-│   └── cron_scheduler.py      # Monthly billing cron
+│   ├── stream_consumer.py         # Redis Streams consumer — lắng nghe và dispatch events
+│   └── cron_scheduler.py          # Cron job — kích hoạt billing cycle hàng tháng
 │
-├── docker-compose.yml         # PostgreSQL + Redis + Qdrant
-└── requirements.txt
+├── docker-compose.yml             # Khởi động: PostgreSQL + Redis + Qdrant (local dev)
+└── requirements.txt               # Dependencies: fastapi, google-generativeai, qdrant-client...
 ```
 
 ---
