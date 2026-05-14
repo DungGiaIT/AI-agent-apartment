@@ -4,6 +4,7 @@ from openai import RateLimitError, BadRequestError, PermissionDeniedError
 
 from app.schemas.schema_verifier import rawListingInput, verifyListingResponse
 from app.agents.agent_verifier import verify_listing
+from app.core.redis_client import emit_event
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +23,8 @@ router = APIRouter(prefix="/api", tags=["Agent 1 - Listing Verifier"])
     - Bài đăng đã chuẩn hoá (title, description, price)
     - Metadata căn hộ (diện tích, phòng ngủ, tiện nghi...)
     - Kết quả kiểm duyệt (Published / Draft + lý do)
-    - Nhãn ảnh gợi ý cho Vision AI xử lý ở bước sau
+    - `image_tags_suggested`: nhãn gợi ý từ mô tả chữ
+    - `image_analyses`: auto-tag từng ảnh (phòng/cảnh), điểm sáng/nét, cảnh báo watermark/stock (khi gửi `images`)
 
     **Quy tắc tự động:**
     - `score >= 70` + có đủ giá/diện tích/quận → `status = Published`
@@ -32,6 +34,20 @@ router = APIRouter(prefix="/api", tags=["Agent 1 - Listing Verifier"])
 async def verify_listing_endpoint(payload: rawListingInput) -> verifyListingResponse:
     try:
         result = verify_listing(payload)
+
+        # Emit listing.approved if published
+        if result.listing.status.value == "published":
+            event_payload = {
+                "owner_id": payload.owner_id,
+                "title": result.listing.title,
+                "description": result.listing.description,
+                "price": result.listing.price_per_month,
+                "area": result.apartment_meta.area_m2,
+                "room_number": result.apartment_meta.room_number,
+                "metadata": result.model_dump_json()
+            }
+            emit_event("listing.approved", event_payload)
+            logger.info(f"Emitted listing.approved for owner {payload.owner_id}")
 
         return verifyListingResponse(
             success=True,

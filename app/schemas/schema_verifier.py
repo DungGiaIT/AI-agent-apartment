@@ -23,9 +23,53 @@ class validationStatus(str, Enum):
     Fail = "fail"
 
 
+class imageRoomTag(str, Enum):
+    phong_khach = "phong_khach"
+    phong_ngu = "phong_ngu"
+    phong_tam = "phong_tam"
+    bep = "bep"
+    ban_cong = "ban_cong"
+    hanh_lang = "hanh_lang"
+    view_thanh_pho = "view_thanh_pho"
+    view_bien = "view_bien"
+    view_song = "view_song"
+    noi_that_chung = "noi_that_chung"
+    tien_ich_toa_nha = "tien_ich_toa_nha"
+    khac = "khac"
+
+
 # ─────────────────────────────────────────────
 # INPUT — Dữ liệu thô nhận từ NestJS
 # ─────────────────────────────────────────────
+class rawListingImageInput(BaseModel):
+    """Một ảnh đính kèm: URL công khai hoặc base64 (khi CDN chưa public)."""
+
+    image_id: str = Field(
+        ...,
+        min_length=1,
+        max_length=128,
+        description="ID duy nhất do client/NestJS gán — dùng để khớp với kết quả vision.",
+    )
+    url: Optional[str] = Field(
+        None,
+        max_length=2048,
+        description="HTTPS URL ảnh (bucket/CDN public).",
+    )
+    media_type: str = Field(
+        default="image/jpeg",
+        description="MIME type khi dùng base64, ví dụ image/jpeg, image/png, image/webp.",
+    )
+    base64_data: Optional[str] = Field(
+        None,
+        description="Nội dung ảnh base64 (không gồm tiền tố data:...). Bắt buộc nếu không có url.",
+    )
+
+    @model_validator(mode="after")
+    def url_or_base64(self) -> "rawListingImageInput":
+        if not (self.url or self.base64_data):
+            raise ValueError("Mỗi ảnh cần có url hoặc base64_data.")
+        return self
+
 
 class rawListingInput(BaseModel):
     rawText: str = Field(
@@ -62,6 +106,15 @@ class rawListingInput(BaseModel):
                 "an ninh tốt. Có máy lạnh và máy giặt. Ai cần liên hệ để xem nhà nhé."
             ),
         ],
+    )
+
+    images: list[rawListingImageInput] = Field(
+        default_factory=list,
+        max_length=12,
+        description=(
+            "Danh sách ảnh minh họa (tối đa 12). NestJS gửi URL public hoặc base64. "
+            "Agent 1 chạy Vision để auto-tag, chấm chất lượng và cảnh báo watermark."
+        ),
     )
 
     owner_id: str = Field(
@@ -195,6 +248,55 @@ class apartmentMetaOutput(BaseModel):
     )
 
 
+class listingImageAnalysis(BaseModel):
+    """Kết quả Vision cho một ảnh — lưu Listing_images / bộ lọc."""
+
+    image_id: str = Field(
+        ...,
+        description="Khớp rawListingImageInput.image_id.",
+    )
+    primary_tag: imageRoomTag = Field(
+        ...,
+        description="Nhãn chính (một không gian nổi bật nhất trong khung hình).",
+    )
+    secondary_tags: list[imageRoomTag] = Field(
+        default_factory=list,
+        max_length=5,
+        description="Các nhãn phụ (tối đa 5), không trùng primary_tag.",
+    )
+    brightness_score: int = Field(
+        ...,
+        ge=0,
+        le=100,
+        description="Độ sáng tổng thể 0-100 (100=rất sáng, dễ xem).",
+    )
+    sharpness_score: int = Field(
+        ...,
+        ge=0,
+        le=100,
+        description="Độ nét 0-100 (0=rất mờ/mất nét, 100=rất sắc).",
+    )
+    watermark_or_branding_suspected: bool = Field(
+        ...,
+        description="True nếu thấy logo/watermark/text đối thủ hoặc branding lạ.",
+    )
+    duplicate_or_stock_photo_suspected: bool = Field(
+        ...,
+        description="True nếu giống ảnh stock/generic hoặc nghi ngờ copy từ site khác.",
+    )
+    confidence: float = Field(
+        ...,
+        ge=0.0,
+        le=1.0,
+        description="Độ tin cậy của phân loại primary_tag (0-1).",
+    )
+    notes_vi: Optional[str] = Field(
+        None,
+        max_length=500,
+        description="Ghi chú ngắn tiếng Việt (ví dụ: 'chỉnh sáng quá mức', 'có chữ mờ góc phải').",
+    )
+
+
 class validationOutput(BaseModel):
     status: validationStatus = Field(
         ...,
@@ -260,9 +362,17 @@ class listingVerifiedOutput(BaseModel):
     image_tags_suggested: list[str] = Field(
         default_factory=list,
         description=(
-            "Nhãn ảnh gợi ý cho Vision AI xử lý ở bước upload ảnh. "
-            "Dùng để pre-tag Listing_images khi chủ nhà tải ảnh lên. "
-            "VD: ['phong_khach', 'phong_ngu', 'bep', 'ban_cong', 'ho_boi']"
+            "Nhãn ảnh gợi ý suy ra từ mô tả chữ (NER / ngữ cảnh), không thay thế vision. "
+            "VD: ['phong_khach', 'phong_ngu', 'bep', 'ban_cong']. "
+            "Khi có images, nên đồng bộ với image_analyses trong ứng dụng."
+        ),
+    )
+
+    image_analyses: list[listingImageAnalysis] = Field(
+        default_factory=list,
+        description=(
+            "Phân tích từng ảnh: tag phòng/cảnh, điểm sáng/nét, nghi watermark/stock. "
+            "Rỗng nếu request không gửi images."
         ),
     )
 

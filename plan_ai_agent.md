@@ -142,129 +142,154 @@ graph TD
 
 ---
 
-## 🗂️ PHẦN 4 — Folder Structure (Monorepo)
+## 🗂️ PHẦN 4 — Folder Structure (Monorepo thực tế)
+
+> ⚠️ **Quan sát từ codebase thực:** Nhóm FastAPI đang dùng **flat-file naming convention**.
+> Pattern: `agent_*.py` / `route_*.py` / `prompt_*.py` / `schema_*.py`
 
 ```
-fastapi-ai-engine/
-├── app/
+fastapi-ai-engine/                   ← MONOREPO ROOT (NestJS + FastAPI chung 1 repo)
+│
+├── src/                             ← 🟦 NHÓM NESTJS (Backend chính, sở hữu DB qua Prisma)
+│   ├── apartment/
+│   │   ├── dto/
+│   │   │   ├── create-apartment.dto.ts  # Validate input tạo căn hộ
+│   │   │   └── update-apartment.dto.ts
+│   │   ├── apartment.controller.ts      # REST: POST/GET/PATCH /apartment
+│   │   ├── apartment.module.ts
+│   │   └── apartment.service.ts         # CRUD Prisma → PostgreSQL
+│   │
+│   ├── listing/
+│   │   ├── dto/
+│   │   │   ├── create-listing.dto.ts    # Validate input tạo listing
+│   │   │   ├── update-listing.dto.ts
+│   │   │   └── search-listing.dto.ts    # Filter: keyword, minPrice, maxPrice
+│   │   ├── listing.controller.ts        # REST: POST/GET /listing, GET /listing/search
+│   │   ├── listing.module.ts
+│   │   └── listing.service.ts           # ← 🔗 ĐIỂM KẾT NỐI VỚI FASTAPI
+│   │                                    #   findWithInfor() đã format data cho Agent
+│   │                                    #   TODO: thêm callAiVerifier() gọi FastAPI
+│   │
+│   ├── prisma/
+│   │   ├── prisma.module.ts
+│   │   └── prisma.service.ts            # Prisma client — kết nối PostgreSQL
+│   │
+│   ├── app.module.ts                    # Root NestJS module
+│   └── main.ts                          # Entry — chạy port 3000
+│
+├── app/                             ← 🟩 NHÓM FASTAPI (AI Engine, chạy port 8000)
+│   │
+│   ├── agents/                      # Business logic AI — mỗi file = 1 agent
+│   │   ├── agent_verifier.py        # ✅ Agent 1 — Listing Verifier (đã có)
+│   │   │                            #   instructor + OpenAI-compat → gemini-1.5-flash
+│   │   │                            #   verify_listing(payload) → listingVerifiedOutput
+│   │   ├── agent_broker.py          # 🔵 Agent 2 — Super Broker
+│   │   ├── agent_concierge.py       # 🔧 Agent 3 — Smart Concierge
+│   │   └── agent_admin.py           # 💰 Agent 4 — Contract & Admin
+│   │
+│   ├── api/
+│   │   └── routes/                  # HTTP endpoints — NestJS gọi vào đây
+│   │       ├── route_verifier.py    # ✅ POST /api/v1/verify-listing (đã có)
+│   │       ├── route_broker.py      # POST /api/v1/search
+│   │       ├── route_concierge.py   # POST /api/v1/maintenance
+│   │       └── route_admin.py       # POST /api/v1/invoice + /api/v1/webhook/payment
+│   │
+│   ├── prompts/                     # System prompts tách riêng — chỉnh không cần sửa code
+│   │   ├── prompt_verifier.py       # ✅ Prompt Agent 1 (đã có)
+│   │   ├── prompt_broker.py         # Prompt intent extraction + RAG reasoning
+│   │   ├── prompt_concierge.py      # Prompt phân loại URGENT / NORMAL
+│   │   └── prompt_admin.py          # Prompt email nhắc nợ (lịch sự / cảnh báo)
+│   │
+│   ├── schemas/                     # Pydantic I/O contracts — NestJS phải tuân theo
+│   │   ├── schema_verifier.py       # ✅ rawListingInput → listingVerifiedOutput
+│   │   ├── schema_broker.py         # searchQueryInput → searchResultOutput
+│   │   ├── schema_concierge.py      # maintenanceRequestInput → maintenanceTicketOutput
+│   │   └── schema_admin.py          # utilityReadingInput → invoiceOutput
+│   │
+│   ├── services/                    # External service integrations (dùng chung)
+│   │   ├── qdrant_service.py        # Vector index + similarity search (Agent 2)
+│   │   ├── email_service.py         # SMTP dispatcher (Agent 3 + 4)
+│   │   ├── pdf_service.py           # Render PDF hóa đơn (Agent 4)
+│   │   └── vietqr_service.py        # Tạo mã QR VietQR (Agent 4)
+│   │
 │   ├── core/
-│   │   ├── config.py              # Settings, env vars (load từ .env)
-│   │   ├── database.py            # PostgreSQL connection (SQLAlchemy engine)
-│   │   ├── redis_streams.py       # Event bus client — publish/consume events (shared)
-│   │   └── gemini_client.py       # Shared Gemini SDK client (gemini-1.5-flash)
+│   │   └── config.py                # ✅ Load .env → settings (đã có)
 │   │
-│   ├── agents/
-│   │   ├── listing_verifier/      # Agent 1 — Kiểm duyệt & chuẩn hóa bất động sản
-│   │   │   ├── prompts.py         # Prompt NLP extraction + Auto-copywriting SEO
-│   │   │   ├── router.py          # FastAPI routes: POST /listings
-│   │   │   ├── nlp_pipeline.py    # Trích xuất thực thể (diện tích, giá, phòng, thú cưng)
-│   │   │   ├── vision_pipeline.py # Auto-tagging ảnh, kiểm tra chất lượng, watermark
-│   │   │   └── service.py         # Orchestration: gọi NLP + Vision → validate → emit event
-│   │   │
-│   │   ├── super_broker/          # Agent 2 — Tìm kiếm & tư vấn ngữ cảnh cho khách thuê
-│   │   │   ├── prompts.py         # Prompt intent extraction + RAG reasoning explanation
-│   │   │   ├── router.py          # FastAPI routes: POST /search, POST /schedule
-│   │   │   ├── intent_extractor.py# Parse câu hỏi → constraints (giá, vị trí, thú cưng)
-│   │   │   ├── qdrant_service.py  # Kết nối Qdrant: index listing + vector search
-│   │   │   ├── rag_engine.py      # Reasoning: kết hợp kết quả search + giải thích lý do
-│   │   │   └── service.py         # Orchestration: query → search → reason → respond
-│   │   │
-│   │   ├── smart_concierge/       # Agent 3 — Quản gia sự cố & điều phối bảo trì
-│   │   │   ├── prompts.py         # Prompt phân loại mức độ nghiêm trọng (URGENT/NORMAL)
-│   │   │   ├── router.py          # FastAPI routes: POST /maintenance, PATCH /tickets/{id}
-│   │   │   ├── triage_engine.py   # Phân loại sự cố + xác định mức độ ưu tiên
-│   │   │   ├── dispatcher.py      # Gửi email thông báo cho kỹ thuật viên (SMTP)
-│   │   │   └── service.py         # Orchestration: triage → assign → sync status → CSAT
-│   │   │
-│   │   └── contract_admin/        # Agent 4 — Kế toán & hợp đồng tự động
-│   │       ├── prompts.py         # Prompt sinh nội dung email nhắc nợ (lịch sự / cảnh báo)
-│   │       ├── router.py          # FastAPI routes: POST /invoices, POST /webhook/payment
-│   │       ├── billing_engine.py  # Tính hóa đơn: điện + nước + phí quản lý theo hợp đồng
-│   │       ├── pdf_generator.py   # Render PDF hóa đơn đính kèm mã VietQR
-│   │       ├── vietqr_service.py  # Tạo mã QR thanh toán theo chuẩn VietQR
-│   │       ├── reconciliation.py  # Lắng nghe webhook ngân hàng → gạch nợ tự động
-│   │       ├── dunning.py         # Chuỗi nhắc nợ tự động: ngày 3 → 7 → 14
-│   │       └── service.py         # Orchestration: billing cycle + payment flow + report
-│   │
-│   ├── schemas/                   # Pydantic schemas — validate I/O contract với NestJS & internal agents
-│   │   │
-│   │   ├── schema_verifier.py     # ✅ Agent 1 — Listing Verifier (đã có)
-│   │   │   # INPUT
-│   │   │   # ├── rawListingInput          → Text thô từ NestJS + owner_id + db_apartment_data (đối soát)
-│   │   │   # OUTPUT
-│   │   │   # ├── listingCoreOutput        → title SEO, description chuẩn, price_per_month, status
-│   │   │   # ├── amenityItem              → Tiện nghi phân loại: furniture / building / policy
-│   │   │   # ├── apartmentMetaOutput      → area_m2, floor, room_number, note, amenities[]
-│   │   │   # ├── validationOutput         → score(0-100), data_conflicts, missing_fields, feedback_to_owner
-│   │   │   # ├── listingVerifiedOutput    → Root output: listing + apartment_meta + image_tags + validation
-│   │   │   # └── verifyListingResponse    → HTTP wrapper: {success, data, error}
-│   │   │
-│   │   ├── schema_broker.py       # 🔵 Agent 2 — Super Broker
-│   │   │   # INPUT
-│   │   │   # ├── searchQueryInput         → query (ngôn ngữ tự nhiên), tenant_id, conversation_history[]
-│   │   │   # ├── extractedConstraints     → max_price, min_price, pet_friendly, max_commute_min, districts[]
-│   │   │   # OUTPUT
-│   │   │   # ├── listingMatch             → listing_id, score, reasoning (lý do phù hợp bằng tiếng Việt)
-│   │   │   # ├── searchResultOutput       → top_matches[listingMatch], summary, suggested_schedule_url
-│   │   │   # └── brokerResponse           → HTTP wrapper: {success, data, error}
-│   │   │
-│   │   ├── schema_concierge.py    # 🔧 Agent 3 — Smart Concierge
-│   │   │   # INPUT
-│   │   │   # ├── maintenanceRequestInput  → tenant_id, unit_id, description, image_urls[], reported_at
-│   │   │   # ├── ticketStatusUpdate       → ticket_id, new_status, updated_by, note
-│   │   │   # OUTPUT
-│   │   │   # ├── severityLevel (Enum)     → URGENT | NORMAL
-│   │   │   # ├── ticketStatus (Enum)      → PENDING | ASSIGNED | IN_PROGRESS | COMPLETED
-│   │   │   # ├── triageOutput             → severity, priority_score, classification_reason
-│   │   │   # ├── maintenanceTicketOutput  → ticket_id, severity, assigned_to, status, eta
-│   │   │   # ├── csatSurveyOutput         → ticket_id, rating(1-5), comment, submitted_at
-│   │   │   # └── conciergeResponse        → HTTP wrapper: {success, data, error}
-│   │   │
-│   │   └── schema_admin.py        # 💰 Agent 4 — Contract & Admin
-│   │       # INPUT
-│   │       # ├── utilityReadingInput      → unit_id, month, year, electricity_kwh, water_m3
-│   │       # ├── paymentWebhookInput      → invoice_id, amount, bank_ref, transaction_time, bank_code
-│   │       # OUTPUT
-│   │       # ├── billingItem              → label (Điện/Nước/Phí QL), unit_price, quantity, subtotal
-│   │       # ├── invoiceOutput            → invoice_id, tenant_id, items[], total, due_date, pdf_url, vietqr_payload
-│   │       # ├── dunningStage (Enum)      → REMINDER(day 3) | WARNING(day 7) | ESCALATE(day 14)
-│   │       # ├── reconciliationOutput     → invoice_id, matched, paid_amount, remaining, closed_at
-│   │       # └── adminResponse            → HTTP wrapper: {success, data, error}
-│   │
-│   ├── models/                    # SQLAlchemy ORM models (shared across agents)
-│   │   ├── listing.py             # Bất động sản: địa chỉ, giá, nội thất, trạng thái
-│   │   ├── tenant.py              # Khách thuê: thông tin cá nhân, hợp đồng liên kết
-│   │   ├── invoice.py             # Hóa đơn: kỳ thanh toán, trạng thái, PDF URL
-│   │   └── maintenance.py         # Ticket bảo trì: mức độ, trạng thái, CSAT score
-│   │
-│   └── main.py                    # FastAPI app entry — mount tất cả agent routers
+│   └── main.py                      # ✅ FastAPI entry — mount tất cả routes
 │
-├── workers/
-│   ├── stream_consumer.py         # Redis Streams consumer — lắng nghe và dispatch events
-│   └── cron_scheduler.py          # Cron job — kích hoạt billing cycle hàng tháng
-│
-├── docker-compose.yml             # Khởi động: PostgreSQL + Redis + Qdrant (local dev)
-└── requirements.txt               # Dependencies: fastapi, google-generativeai, qdrant-client...
+x1─ .env                             # ⚠️ KHÔNG commit — secrets thực
+│                                    #   GEMINI_API_KEY, REDIS_URL, QDRANT_URL
+│                                    #   SMTP_HOST/USER/PASS
+│                                    #   FASTAPI_URL=http://localhost:8000  ← NestJS dùng
+├── .env.example                     # Template — commit được
+├── docker-compose.yml               # Redis + Qdrant (local dev)
+└── requirements.txt                 # fastapi, instructor, openai, qdrant-client...
 ```
 
 ---
 
+## 🔗 PHẦN 4B — NestJS ↔ FastAPI Integration Map
+
+```
+AGENT 1 — Listing Verifier
+──────────────────────────────────────────────────────────────────
+  Landlord POST raw text
+    → NestJS  POST /listing          (listing.controller.ts)
+    → listing.service: lấy db_apartment_data từ Prisma
+    → [TODO] callAiVerifier()
+    → FastAPI POST /api/v1/verify-listing
+         Body: { rawText, owner_id, db_apartment_data }
+    ← FastAPI trả về listingVerifiedOutput
+    → NestJS lưu Prisma: title, description, price, status, amenities[]
+
+AGENT 2 — Super Broker
+──────────────────────────────────────────────────────────────────
+  Tenant gửi câu hỏi chat
+    → NestJS  GET /listing/search    (listing.controller.ts)
+    → [TODO] callAiBroker()
+    → FastAPI POST /api/v1/search
+         Body: { query, tenant_id, conversation_history[] }
+    ← FastAPI trả về top 3 listings + reasoning tiếng Việt
+
+AGENT 3 — Smart Concierge
+──────────────────────────────────────────────────────────────────
+  Tenant báo sự cố
+    → NestJS  POST /maintenance      [TODO: tạo module mới]
+    → [TODO] callAiConcierge()
+    → FastAPI POST /api/v1/maintenance
+         Body: { tenant_id, unit_id, description, image_urls[] }
+    ← FastAPI trả về { ticket_id, severity, assigned_to, eta }
+    → F unastAPI gửi email tới kỹ thuật viên (SMTP)
+
+AGENT 4 — Contract & Admin
+──────────────────────────────────────────────────────────────────
+  Monthly cron (@Cron NestJS)
+    → [TODO] callAiInvoice()
+    → FastAPI POST /api/v1/invoice
+         Body: {it_id, month, year, electricity_kwh, water_m3 }
+    ← FastAPI tính tiền → PDF → Email tenant → trả invoice_id
+  Bank webhook
+    → FastAPI POST /api/v1/webhook/payment  (bank gọi trực tiếp)
+    → reconcile → [TODO] callback NestJS cập nhật paid status
+```
 ## ⚙️ PHẦN 5 — Tech Stack Summary
 
 | Layer | Technology | Ghi chú |
 |---|---|---|
-| API Framework | FastAPI | Đang dùng |
-| LLM | gemini-1.5-flash | Tất cả 4 agents |
-| Agent Framework | Google Gemini Agent | Agents 2, 3, 4 |
-| Vector Database | Qdrant | Agent 2 only |
-| Main Database | PostgreSQL | Shared |
-| Event Bus | Redis Streams | Shared |
+| API Framework | FastAPI | AI Engine — port 8000 |
+| NestJS Backend | NestJS + Prisma | Backend chính — port 3000, sở hữu DB |
+| LLM | **gemini-1.5-flash** | Tất cả 4 agents (qua OpenAI-compat endpoint) |
+| Structured Output | **instructor** library | Enforce Pydantic schema từ Gemini output |
+| Vector Database | Qdrant | Agent 2 — self-hosted Docker |
+| Main Database | PostgreSQL (Prisma) | NestJS sở hữu, FastAPI không trực tiếp read |
+| Event Bus | Redis Streams | Shared — giai đoạn sau khi có Agent 2+ |
 | PDF Generation | WeasyPrint / ReportLab | Agent 4 |
 | QR Code | VietQR standard | Agent 4 |
 | Email | SMTP (smtplib / FastMail) | Agents 3, 4 |
-| Container | Docker Compose | Local dev |
+| Container | Docker Compose | Redis + Qdrant (local dev) |
 
 ---
+
 
 ## 🔐 PHẦN 6 — Non-Functional Requirements
 
@@ -294,10 +319,10 @@ fastapi-ai-engine/
 ## 🚀 Implementation Roadmap
 
 ### Phase 1 — Foundation (Tuần 1–2)
-- [x] Agent 1: Listing Verifier (đang xây)
-- [ ] Setup Redis Streams client (shared)
-- [ ] Setup Qdrant (Docker)
-- [ ] Emit `listing.approved` event từ Agent 1
+- [x] Agent 1: Listing Verifier (đã xong)
+- [x] Setup Redis Streams client (shared)
+- [x] Setup Qdrant (Docker)
+- [x] Emit `listing.approved` event từ Agent 1
 
 ### Phase 2 — Agent 2 (Tuần 3–4)
 - [ ] Qdrant indexing consumer (nhận `listing.approved`)
