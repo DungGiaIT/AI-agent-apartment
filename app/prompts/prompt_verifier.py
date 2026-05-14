@@ -131,6 +131,23 @@ feedback_to_owner phải:
   - Giải thích ngắn tại sao thông tin đó quan trọng với người thuê
   - Khuyến khích chủ nhà bổ sung để bài được duyệt nhanh
 
+[8. VISION — KHI CÓ ẢNH ĐÍNH KÈM]
+Nếu user message kèm các khối ảnh (theo thứ tự đã nêu trước trong text):
+  - Trả về image_analyses: ĐÚNG MỘT phần tử cho MỖI image_id đã liệt kê, cùng thứ tự.
+  - primary_tag: chọn ĐÚNG một giá trị trong enum imageRoomTag (vd: phong_khach, bep, ban_cong, view_song...).
+  - secondary_tags: tối đa 5 nhãn phụ, không trùng primary_tag.
+  - brightness_score / sharpness_score: đánh giá khách quan theo khung hình (0-100).
+  - watermark_or_branding_suspected: True nếu thấy logo công ty BĐS khác, watermark, URL, số điện thoại overlay lạ.
+  - duplicate_or_stock_photo_suspected: True nếu ảnh quá generic (render 3D hoàn hảo), hoặc có dấu hiệu ảnh catalogue.
+  - confidence: độ chắc chắn phân loại primary_tag (0-1).
+  - notes_vi: ngắn gọn tiếng Việt (tối đa 1-2 câu).
+
+Nếu KHÔNG có ảnh đính kèm: image_analyses = [] (mảng rỗng).
+
+[9. image_tags_suggested — TỪ MÔ TẢ CHỮ]
+Luôn điền image_tags_suggested dựa trên rawText (gợi ý không gian có thể có), dùng slug snake_case giống enum (vd phong_khach, bep).
+Không dùng image_tags_suggested để thay thế image_analyses khi đã có ảnh.
+
 ════════════════════════════════════════════
 RÀNG BUỘC TUYỆT ĐỐI
 ════════════════════════════════════════════
