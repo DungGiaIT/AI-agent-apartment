@@ -1,4 +1,6 @@
 import logging
+import base64
+import requests
 from typing import Any
 
 import instructor
@@ -35,11 +37,27 @@ def build_instructor_client() -> instructor.Instructor:
 
 
 def image_url_for_api(img: rawListingImageInput) -> str:
-    if img.url:
-        return img.url.strip()
-    b64 = (img.base64_data or "").strip()
-    mt = (img.media_type or "image/jpeg").strip()
-    return f"data:{mt};base64,{b64}"
+    b64_val = (img.base64_data or "").strip()
+    url_val = (img.url or "").strip()
+
+    # 1. Ưu tiên base64 nếu nó có giá trị thực (không phải chuỗi "string" mặc định của tool test)
+    if b64_val and b64_val.lower() != "string":
+        mt = (img.media_type or "image/jpeg").strip()
+        return f"data:{mt};base64,{b64_val}"
+        
+    # 2. Tiếp theo là URL (nếu không phải chuỗi "string" và bắt đầu bằng http)
+    if url_val and url_val.lower() != "string" and url_val.startswith("http"):
+        try:
+            response = requests.get(url_val, timeout=10)
+            response.raise_for_status()
+            b64 = base64.b64encode(response.content).decode("utf-8")
+            mt = response.headers.get("Content-Type", "image/jpeg")
+            return f"data:{mt};base64,{b64}"
+        except Exception as e:
+            logger.warning(f"Failed to fetch image {url_val}: {e}")
+            raise ValueError(f"Không thể tải ảnh từ URL: {url_val}")
+            
+    raise ValueError("Thiếu dữ liệu ảnh hợp lệ (url hoặc base64_data).")
 
 
 def build_user_content_parts(
