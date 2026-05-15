@@ -18,16 +18,19 @@ from app.prompts.prompt_verifier import SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
 
-
-GEMINI_MODEL = "gemini-2.5-flash"
+MODEL_NAME = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
 _MAX_IMAGES = 10
 
 
 def build_instructor_client() -> instructor.Instructor:
 
     openai_client = OpenAI(
-        api_key=settings.gemini_api_key,
-        base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+        api_key=settings.openrouter_api_key,
+        base_url="https://openrouter.ai/api/v1",
+        default_headers={
+            "HTTP-Referer": "http://localhost:8000", # Optional, for OpenRouter rankings
+            "X-Title": "FastAPI AI Engine", # Optional, for OpenRouter rankings
+        }
     )
 
     return instructor.from_openai(
@@ -195,7 +198,7 @@ Lưu ý đặc biệt:
 
     try:
         result: listingVerifiedOutput = client.chat.completions.create(
-            model=GEMINI_MODEL,
+            model=MODEL_NAME,
             response_model=listingVerifiedOutput,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
@@ -221,7 +224,7 @@ Lưu ý đặc biệt:
     except Exception as e:
         logger.error(
             f"[Agent1] API Error - {type(e).__name__}: {str(e)}\n"
-            f"API Key status: {'***' if settings.gemini_api_key else 'NOT SET'}\n"
-            f"Model: {GEMINI_MODEL}"
+            f"API Key status: {'***' if settings.openrouter_api_key else 'NOT SET'}\n"
+            f"Model: {MODEL_NAME}"
         )
         raise
