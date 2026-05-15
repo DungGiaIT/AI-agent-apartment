@@ -2,6 +2,11 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     # API Keys
     gemini_api_key: str = ""
+    openrouter_api_key: str = ""
+
+    # Connections
+    redis_url: str = "redis://localhost:6379/0"
+    qdrant_url: str = "http://localhost:6333"
 
     # App Info
     app_name: str = "Agent 1 - Listing Verifier"
