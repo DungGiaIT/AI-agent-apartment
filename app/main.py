@@ -22,7 +22,7 @@ async def lifespan(app: FastAPI):
 
     logger.info(f"🚀 {settings.app_name} v{settings.app_version} đang khởi động...")
     logger.info(f"   Debug mode: {settings.debug}")
-    logger.info(f"   OpenRouter API key: {'✓ đã cấu hình' if settings.openrouter_api_key else '✗ THIẾU'}")
+    logger.info(f"   Gemini API key: {'✓ đã cấu hình' if settings.gemini_api_key else '✗ THIẾU'}")
 
     yield
 

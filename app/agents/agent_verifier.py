@@ -1,6 +1,7 @@
 import logging
 import base64
-import requests
+import httpx
+import time
 from typing import Any
 
 import instructor
@@ -18,19 +19,15 @@ from app.prompts.prompt_verifier import SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
 
-MODEL_NAME = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
+MODEL_NAME = "gemini-2.5-flash"
 _MAX_IMAGES = 10
 
 
 def build_instructor_client() -> instructor.Instructor:
 
     openai_client = OpenAI(
-        api_key=settings.openrouter_api_key,
-        base_url="https://openrouter.ai/api/v1",
-        default_headers={
-            "HTTP-Referer": "http://localhost:8000", # Optional, for OpenRouter rankings
-            "X-Title": "FastAPI AI Engine", # Optional, for OpenRouter rankings
-        }
+        api_key=settings.gemini_api_key,
+        base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
     )
 
     return instructor.from_openai(
@@ -45,17 +42,20 @@ def image_url_for_api(img: rawListingImageInput) -> str:
 
     # 1. Ưu tiên base64 nếu nó có giá trị thực (không phải chuỗi "string" mặc định của tool test)
     if b64_val and b64_val.lower() != "string":
-        mt = (img.media_type or "image/jpeg").strip()
+        mt = (img.media_type or "image/jpg").strip()
         return f"data:{mt};base64,{b64_val}"
         
     # 2. Tiếp theo là URL (nếu không phải chuỗi "string" và bắt đầu bằng http)
     if url_val and url_val.lower() != "string" and url_val.startswith("http"):
         try:
-            response = requests.get(url_val, timeout=10)
-            response.raise_for_status()
-            b64 = base64.b64encode(response.content).decode("utf-8")
-            mt = response.headers.get("Content-Type", "image/jpeg")
-            return f"data:{mt};base64,{b64}"
+            start_t = time.time()
+            with httpx.Client() as client:
+                response = client.get(url_val, timeout=10.0)
+                response.raise_for_status()
+                b64 = base64.b64encode(response.content).decode("utf-8")
+                mt = response.headers.get("Content-Type", "image/jpg")
+                logger.info(f"Đã tải ảnh {url_val} thành công trong {time.time() - start_t:.2f}s")
+                return f"data:{mt};base64,{b64}"
         except Exception as e:
             logger.warning(f"Failed to fetch image {url_val}: {e}")
             raise ValueError(f"Không thể tải ảnh từ URL: {url_val}")
@@ -197,6 +197,7 @@ Lưu ý đặc biệt:
     )
 
     try:
+        t0 = time.time()
         result: listingVerifiedOutput = client.chat.completions.create(
             model=MODEL_NAME,
             response_model=listingVerifiedOutput,
@@ -204,13 +205,14 @@ Lưu ý đặc biệt:
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": user_content},
             ],
-            max_retries=0,
+            max_retries=2,
         )
+        t1 = time.time()
 
         apply_image_post_processing(result, images)
 
         logger.info(
-            f"[Agent1] Hoàn tất — "
+            f"[Agent1] Hoàn tất dùng model {MODEL_NAME} trong {t1 - t0:.2f}s — "
             f"status={result.listing.status.value}, "
             f"score={result.validation.score}/100, "
             f"amenities={len(result.apartment_meta.amenities)} items, "
