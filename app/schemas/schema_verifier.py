@@ -37,10 +37,6 @@ class imageRoomTag(str, Enum):
     tien_ich_toa_nha = "tien_ich_toa_nha"
     khac = "khac"
 
-
-# ─────────────────────────────────────────────
-# INPUT — Dữ liệu thô nhận từ NestJS
-# ─────────────────────────────────────────────
 class rawListingImageInput(BaseModel):
     """Một ảnh đính kèm: URL công khai hoặc base64 (khi CDN chưa public)."""
 
@@ -56,8 +52,8 @@ class rawListingImageInput(BaseModel):
         description="HTTPS URL ảnh (bucket/CDN public).",
     )
     media_type: str = Field(
-        default="image/jpeg",
-        description="MIME type khi dùng base64, ví dụ image/jpeg, image/png, image/webp.",
+        default="image/jpg",
+        description="MIME type khi dùng base64, ví dụ image/jpg, image/png, image/webp.",
     )
     base64_data: Optional[str] = Field(
         None,
