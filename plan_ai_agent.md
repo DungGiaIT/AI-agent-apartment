@@ -1,4 +1,4 @@
-# 🏢 AI-Integrated Apartments — 4-Agent System Design
+# 🏢 AI-Integrated Apartments — 3-Agent System Design
 
 > **Status:** Design Phase — Pending Implementation Approval  
 > **Scale:** 100 căn hộ / 1,000 users  
@@ -10,7 +10,7 @@
 
 ### Triết lý kiến trúc
 
-Bốn agent hoạt động **độc lập** (loosely coupled) nhưng **phối hợp** qua Redis Streams event bus.  
+Ba agent hoạt động **độc lập** (loosely coupled) nhưng **phối hợp** qua Redis Streams event bus.  
 Mỗi agent là một **FastAPI service riêng** (hoặc module riêng trong monorepo), có thể deploy và scale độc lập.
 
 ```
@@ -26,13 +26,13 @@ Mỗi agent là một **FastAPI service riêng** (hoặc module riêng trong mon
 └──┬─────────────┬──────────────┬──────────────┬──────────┘
    │             │              │              │
    ▼             ▼              ▼              ▼
-┌──────┐    ┌──────┐      ┌──────┐      ┌──────┐
-│Agent1│    │Agent2│      │Agent3│      │Agent4│
-│Listing    │Super │      │Smart │      │Contract
-│Verif.│    │Broker│      │Conci.│      │&Admin│
-└──┬───┘    └──┬───┘      └──┬───┘      └──┬───┘
-   │           │              │              │
-   └─────────────────┬────────────────────────┘
+┌──────┐    ┌──────┐      ┌──────┐
+│Agent1│    │Agent2│      │Agent3│
+│Listing    │Super │      │Contract
+│Verif.│    │Broker│      │&Admin│
+└──┬───┘    └──┬───┘      └──┬───┘
+   │           │              │
+   └─────────────────┬────────┘
                      ▼
          ┌───────────────────────┐
          │   Redis Streams       │
@@ -57,7 +57,6 @@ graph TD
     ROOT --> A1
     ROOT --> A2
     ROOT --> A3
-    ROOT --> A4
 
     %% SHARED INFRASTRUCTURE
     INFRA["⚙️ Shared Infrastructure"]
@@ -93,35 +92,22 @@ graph TD
     A2_VEC --> A2_RAG["RAG Reasoning\nTop 3 + Giải thích lý do"]
     A2_RAG --> A2_OUT["Output:\nPersonalized Recommendations\n+ Schedule Viewing Link"]
 
-    %% AGENT 3
-    A3["🛠️ Agent 3\nSmart Concierge"]
-    A3 --> A3_T["Trigger: POST /maintenance\n(Tenant báo sự cố)"]
-    A3_T --> A3_TRI["Triage Engine\n(gemini-1.5-flash)"]
-    A3_TRI --> A3_URG["🚨 URGENT\nVỡ ống, Cháy nổ"]
-    A3_TRI --> A3_NRM["📋 NORMAL\nBóng đèn, Điều hoà"]
-    A3_URG --> A3_DISP["Immediate Dispatch\nEmail to Technician"]
-    A3_NRM --> A3_QUEUE["Queue Assign\nNext Available Slot"]
-    A3_DISP --> A3_SYNC["Multi-party Sync\nUpdate: Tenant + Landlord"]
-    A3_QUEUE --> A3_SYNC
-    A3_SYNC --> A3_STATUS["Status Tracking\nTiếp nhận → Đang sửa → Hoàn thành"]
-    A3_STATUS --> A3_CSAT["CSAT Survey\nAuto-send on ticket close"]
-
-    %% AGENT 4
-    A4["💰 Agent 4\nContract & Admin"]
-    A4 --> A4_T1["Trigger 1: Monthly Cron\nBilling Cycle"]
-    A4 --> A4_T2["Trigger 2: Bank Webhook\nPayment Received"]
-    A4 --> A4_T3["Trigger 3: Manual Input\nĐiện/Nước readings"]
-    A4_T1 --> A4_CALC["Dynamic Calculation\nĐiện + Nước + Phí QL"]
-    A4_T3 --> A4_CALC
-    A4_CALC --> A4_PDF["PDF Generation\nHóa đơn + VietQR Code"]
-    A4_PDF --> A4_EMAIL["Email Invoice\nto Tenant"]
-    A4_T2 --> A4_RECON["Payment Reconciliation\nMatch Invoice ID → Gạch nợ"]
-    A4_RECON --> A4_DUNNING{"Paid?"}
-    A4_DUNNING --> |"Yes"| A4_CLOSE["Close Invoice\nUpdate DB"]
-    A4_DUNNING --> |"No - Day 3"| A4_D1["Reminder Email\n(Lịch sự)"]
-    A4_DUNNING --> |"No - Day 7"| A4_D2["Warning Email\n(Cảnh báo)"]
-    A4_DUNNING --> |"No - Day 14"| A4_D3["Escalate to\nLandlord"]
-    A4_CLOSE --> A4_REPORT["Cash Flow Report\ngửi Landlord cuối tháng"]
+    %% AGENT 3 (Contract & Admin)
+    A3["💰 Agent 3\nContract & Admin"]
+    A3 --> A3_T1["Trigger 1: Monthly Cron\nBilling Cycle"]
+    A3 --> A3_T2["Trigger 2: Bank Webhook\nPayment Received"]
+    A3 --> A3_T3["Trigger 3: Manual Input\nĐiện/Nước readings"]
+    A3_T1 --> A3_CALC["Dynamic Calculation\nĐiện + Nước + Phí QL"]
+    A3_T3 --> A3_CALC
+    A3_CALC --> A3_PDF["PDF Generation\nHóa đơn + VietQR Code"]
+    A3_PDF --> A3_EMAIL["Email Invoice\nto Tenant"]
+    A3_T2 --> A3_RECON["Payment Reconciliation\nMatch Invoice ID → Gạch nợ"]
+    A3_RECON --> A3_DUNNING{"Paid?"}
+    A3_DUNNING --> |"Yes"| A3_CLOSE["Close Invoice\nUpdate DB"]
+    A3_DUNNING --> |"No - Day 3"| A3_D1["Reminder Email\n(Lịch sự)"]
+    A3_DUNNING --> |"No - Day 7"| A3_D2["Warning Email\n(Cảnh báo)"]
+    A3_DUNNING --> |"No - Day 14"| A3_D3["Escalate to\nLandlord"]
+    A3_CLOSE --> A3_REPORT["Cash Flow Report\ngửi Landlord cuối tháng"]
 ```
 
 ---
@@ -134,11 +120,8 @@ graph TD
 |---|---|---|---|
 | `listing.approved` | Agent 1 | Agent 2 | `{listing_id, embedding_data, metadata}` |
 | `listing.rejected` | Agent 1 | — | `{listing_id, reason, landlord_email}` |
-| `viewing.scheduled` | Agent 2 | Agent 3 | `{tenant_id, listing_id, datetime}` |
-| `maintenance.created` | Agent 3 | — | `{ticket_id, severity, unit_id}` |
-| `maintenance.completed` | Agent 3 | Agent 4 | `{ticket_id, cost, unit_id}` |
-| `invoice.generated` | Agent 4 | — | `{invoice_id, tenant_id, amount, pdf_url}` |
-| `payment.received` | Agent 4 | — | `{invoice_id, amount, timestamp}` |
+| `invoice.generated` | Agent 3 | — | `{invoice_id, tenant_id, amount, pdf_url}` |
+| `payment.received` | Agent 3 | — | `{invoice_id, amount, timestamp}` |
 
 ---
 
@@ -184,33 +167,29 @@ fastapi-ai-engine/                   ← MONOREPO ROOT (NestJS + FastAPI chung 1
 │   │   │                            #   instructor + OpenAI-compat → gemini-1.5-flash
 │   │   │                            #   verify_listing(payload) → listingVerifiedOutput
 │   │   ├── agent_broker.py          # 🔵 Agent 2 — Super Broker
-│   │   ├── agent_concierge.py       # 🔧 Agent 3 — Smart Concierge
-│   │   └── agent_admin.py           # 💰 Agent 4 — Contract & Admin
+│   │   └── agent_admin.py           # 💰 Agent 3 — Contract & Admin
 │   │
 │   ├── api/
 │   │   └── routes/                  # HTTP endpoints — NestJS gọi vào đây
 │   │       ├── route_verifier.py    # ✅ POST /api/v1/verify-listing (đã có)
 │   │       ├── route_broker.py      # POST /api/v1/search
-│   │       ├── route_concierge.py   # POST /api/v1/maintenance
 │   │       └── route_admin.py       # POST /api/v1/invoice + /api/v1/webhook/payment
 │   │
 │   ├── prompts/                     # System prompts tách riêng — chỉnh không cần sửa code
 │   │   ├── prompt_verifier.py       # ✅ Prompt Agent 1 (đã có)
 │   │   ├── prompt_broker.py         # Prompt intent extraction + RAG reasoning
-│   │   ├── prompt_concierge.py      # Prompt phân loại URGENT / NORMAL
 │   │   └── prompt_admin.py          # Prompt email nhắc nợ (lịch sự / cảnh báo)
 │   │
 │   ├── schemas/                     # Pydantic I/O contracts — NestJS phải tuân theo
 │   │   ├── schema_verifier.py       # ✅ rawListingInput → listingVerifiedOutput
 │   │   ├── schema_broker.py         # searchQueryInput → searchResultOutput
-│   │   ├── schema_concierge.py      # maintenanceRequestInput → maintenanceTicketOutput
 │   │   └── schema_admin.py          # utilityReadingInput → invoiceOutput
 │   │
 │   ├── services/                    # External service integrations (dùng chung)
 │   │   ├── qdrant_service.py        # Vector index + similarity search (Agent 2)
-│   │   ├── email_service.py         # SMTP dispatcher (Agent 3 + 4)
-│   │   ├── pdf_service.py           # Render PDF hóa đơn (Agent 4)
-│   │   └── vietqr_service.py        # Tạo mã QR VietQR (Agent 4)
+│   │   ├── email_service.py         # SMTP dispatcher (Agent 3)
+│   │   ├── pdf_service.py           # Render PDF hóa đơn (Agent 3)
+│   │   └── vietqr_service.py        # Tạo mã QR VietQR (Agent 3)
 │   │
 │   ├── core/
 │   │   └── config.py                # ✅ Load .env → settings (đã có)
@@ -251,17 +230,7 @@ AGENT 2 — Super Broker
          Body: { query, tenant_id, conversation_history[] }
     ← FastAPI trả về top 3 listings + reasoning tiếng Việt
 
-AGENT 3 — Smart Concierge
-──────────────────────────────────────────────────────────────────
-  Tenant báo sự cố
-    → NestJS  POST /maintenance      [TODO: tạo module mới]
-    → [TODO] callAiConcierge()
-    → FastAPI POST /api/v1/maintenance
-         Body: { tenant_id, unit_id, description, image_urls[] }
-    ← FastAPI trả về { ticket_id, severity, assigned_to, eta }
-    → F unastAPI gửi email tới kỹ thuật viên (SMTP)
-
-AGENT 4 — Contract & Admin
+AGENT 3 — Contract & Admin
 ──────────────────────────────────────────────────────────────────
   Monthly cron (@Cron NestJS)
     → [TODO] callAiInvoice()
@@ -278,14 +247,14 @@ AGENT 4 — Contract & Admin
 |---|---|---|
 | API Framework | FastAPI | AI Engine — port 8000 |
 | NestJS Backend | NestJS + Prisma | Backend chính — port 3000, sở hữu DB |
-| LLM | **gemini-1.5-flash** | Tất cả 4 agents (qua OpenAI-compat endpoint) |
+| LLM | **gemini-1.5-flash** | Tất cả 3 agents (qua OpenAI-compat endpoint) |
 | Structured Output | **instructor** library | Enforce Pydantic schema từ Gemini output |
 | Vector Database | Qdrant | Agent 2 — self-hosted Docker |
 | Main Database | PostgreSQL (Prisma) | NestJS sở hữu, FastAPI không trực tiếp read |
 | Event Bus | Redis Streams | Shared — giai đoạn sau khi có Agent 2+ |
-| PDF Generation | WeasyPrint / ReportLab | Agent 4 |
-| QR Code | VietQR standard | Agent 4 |
-| Email | SMTP (smtplib / FastMail) | Agents 3, 4 |
+| PDF Generation | WeasyPrint / ReportLab | Agent 3 |
+| QR Code | VietQR standard | Agent 3 |
+| Email | SMTP (smtplib / FastMail) | Agent 3 |
 | Container | Docker Compose | Redis + Qdrant (local dev) |
 
 ---
@@ -311,7 +280,7 @@ AGENT 4 — Contract & Admin
 | D1 | Redis Streams làm event bus | Celery, Google Pub/Sub | Nhẹ nhất, đủ scale, không over-engineer |
 | D2 | Qdrant làm vector DB | pgvector, Pinecone | Dedicated vector DB, dễ self-host, free |
 | D3 | gemini-1.5-flash | GPT-4, Claude | Đồng bộ Google ecosystem, cost-effective |
-| D4 | Email SMTP cho Agent 3 | Zalo OA, Telegram | Đơn giản nhất, đủ dùng giai đoạn đầu |
+| D4 | Email SMTP cho Agent 3 | Zalo OA, Telegram | Đơn giản nhất, đủ dùng để gửi nhắc nợ/hóa đơn |
 | D5 | Monorepo | Microservices riêng | Scale 100 căn → không cần complexity của microservices |
 
 ---
@@ -322,21 +291,15 @@ AGENT 4 — Contract & Admin
 - [x] Agent 1: Listing Verifier (đã xong)
 - [x] Setup Redis Streams client (shared)
 - [x] Setup Qdrant (Docker)
-- [x] Emit `listing.approved` event từ Agent 1
+- [ ] Emit `listing.approved` event từ Agent 1
 
 ### Phase 2 — Agent 2 (Tuần 3–4)
 - [ ] Qdrant indexing consumer (nhận `listing.approved`)
-- [ ] Intent extraction với gemini-1.5-flash
+- [ ] Intent extraction với gemini-3.1-flash-lite
 - [ ] Vector search + RAG reasoning
 - [ ] Chat API endpoint
 
 ### Phase 3 — Agent 3 (Tuần 5–6)
-- [ ] Triage engine với Gemini
-- [ ] Email SMTP dispatcher
-- [ ] Ticket status tracking
-- [ ] CSAT auto-send
-
-### Phase 4 — Agent 4 (Tuần 7–8)
 - [ ] Billing calculation engine
 - [ ] PDF generation + VietQR
 - [ ] Bank webhook receiver
