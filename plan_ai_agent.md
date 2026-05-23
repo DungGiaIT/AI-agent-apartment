@@ -2,7 +2,7 @@
 
 > **Status:** Design Phase — Pending Implementation Approval  
 > **Scale:** 100 căn hộ / 1,000 users  
-> **LLM:** gemini-1.5-flash | **Event Bus:** Redis Streams | **Vector DB:** Qdrant
+> **LLM:** gemini-2.5-flash | **Event Bus:** Redis Streams | **Vector DB:** Qdrant
 
 ---
 
@@ -67,7 +67,7 @@ graph TD
     %% AGENT 1
     A1["🔍 Agent 1\nListing Verifier"]
     A1 --> A1_T["Trigger: POST /listings\n(Landlord submits raw data)"]
-    A1_T --> A1_NLP["NLP Pipeline\n(gemini-1.5-flash)"]
+    A1_T --> A1_NLP["NLP Pipeline\n(gemini-2.5-flash)"]
     A1_NLP --> A1_EXT["Named Entity Extraction\nDiện tích, Giá, Phòng, Thú cưng"]
     A1_EXT --> A1_COPY["Auto-Copywriting\nSEO Title + Description"]
     A1_T --> A1_VIS["Vision AI Pipeline"]
@@ -85,7 +85,7 @@ graph TD
     A2["💬 Agent 2\nSuper Broker"]
     A1_EVENT --> A2_IDX["Index Listing\nvào Qdrant Vector DB"]
     A2 --> A2_T["Trigger: Tenant Query\n(Chat / Voice)"]
-    A2_T --> A2_INT["Intent Extraction\n(gemini-1.5-flash)"]
+    A2_T --> A2_INT["Intent Extraction\n(gemini-2.5-flash)"]
     A2_INT --> A2_CONST["Constraint Parsing\nMax_Price, Pet_Friendly,\nMax_Commute_Time"]
     A2_CONST --> A2_VEC["Vector Search\nQdrant Similarity Search"]
     A2_IDX --> A2_VEC
@@ -164,7 +164,7 @@ fastapi-ai-engine/                   ← MONOREPO ROOT (NestJS + FastAPI chung 1
 │   │
 │   ├── agents/                      # Business logic AI — mỗi file = 1 agent
 │   │   ├── agent_verifier.py        # ✅ Agent 1 — Listing Verifier (đã có)
-│   │   │                            #   instructor + OpenAI-compat → gemini-1.5-flash
+│   │   │                            #   instructor + OpenAI-compat → gemini-2.5-flash
 │   │   │                            #   verify_listing(payload) → listingVerifiedOutput
 │   │   ├── agent_broker.py          # 🔵 Agent 2 — Super Broker
 │   │   └── agent_admin.py           # 💰 Agent 3 — Contract & Admin
@@ -247,7 +247,7 @@ AGENT 3 — Contract & Admin
 |---|---|---|
 | API Framework | FastAPI | AI Engine — port 8000 |
 | NestJS Backend | NestJS + Prisma | Backend chính — port 3000, sở hữu DB |
-| LLM | **gemini-1.5-flash** | Tất cả 3 agents (qua OpenAI-compat endpoint) |
+| LLM | **gemini-2.5-flash** | Tất cả 3 agents (qua OpenAI-compat endpoint) |
 | Structured Output | **instructor** library | Enforce Pydantic schema từ Gemini output |
 | Vector Database | Qdrant | Agent 2 — self-hosted Docker |
 | Main Database | PostgreSQL (Prisma) | NestJS sở hữu, FastAPI không trực tiếp read |
@@ -279,7 +279,7 @@ AGENT 3 — Contract & Admin
 |---|---|---|---|
 | D1 | Redis Streams làm event bus | Celery, Google Pub/Sub | Nhẹ nhất, đủ scale, không over-engineer |
 | D2 | Qdrant làm vector DB | pgvector, Pinecone | Dedicated vector DB, dễ self-host, free |
-| D3 | gemini-1.5-flash | GPT-4, Claude | Đồng bộ Google ecosystem, cost-effective |
+| D3 | gemini-2.5-flash | GPT-4, Claude | Đồng bộ Google ecosystem, cost-effective |
 | D4 | Email SMTP cho Agent 3 | Zalo OA, Telegram | Đơn giản nhất, đủ dùng để gửi nhắc nợ/hóa đơn |
 | D5 | Monorepo | Microservices riêng | Scale 100 căn → không cần complexity của microservices |
 
