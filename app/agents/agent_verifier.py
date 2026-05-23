@@ -95,9 +95,9 @@ def build_user_content_parts(
     for img in slice_:
         parts.append(
             {
-                "type": "imageUrl",
-                "imageUrl": {"url": imageUrl_for_api(img)},
-            }
+            "type": "image_url",
+            "image_url": {"url": imageUrl_for_api(img)}, 
+        }
         )
     return parts
 
