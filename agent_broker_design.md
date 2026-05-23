@@ -1,7 +1,7 @@
 # 🏢 Agent 2: The Super Broker — Detailed Design Specification
 
 > **Status:** Design Approved — Ready for Implementation  
-> **LLM:** `gemini-2.5-flash`  
+> **LLM:** `gemini-3.1-flash-lite`  
 > **Database Mapping:** Postgres (Prisma) + Qdrant Vector DB  
 > **Architecture Pattern:** Hybrid API & Event-Driven Architecture (Recommended Option 1)
 
@@ -18,7 +18,7 @@
     *   Quy trình chốt lịch đặt xem phòng diễn ra bất đồng bộ thông qua việc phát sự kiện `appointment.requested` lên **Redis Streams**, giao lại cho NestJS xử lý Google Calendar và xin phê duyệt của Chủ nhà.
 
 ### 📋 Giả định & Yêu cầu Phi chức năng (NFRs)
-*   **Độ trễ phản hồi (Latency):** Phản hồi văn bản < 3s, tin nhắn thoại < 4.5s (bao gồm cả phân tích audio trực tiếp bằng khả năng đa phương thức của `gemini-2.5-flash`).
+*   **Độ trễ phản hồi (Latency):** Phản hồi văn bản < 3s, tin nhắn thoại < 4.5s (bao gồm cả phân tích audio trực tiếp bằng khả năng đa phương thức của `gemini-3.1-flash-lite`).
 *   **Quy mô:** 100 căn hộ ban đầu, 1.000 người dùng hoạt động.
 *   **Bảo mật:** Ngăn chặn tuyệt đối các hình thức Prompt Injection cố gắng lấy thông tin hệ thống hoặc làm sai lệch giá phòng. Bảo mật tuyệt đối lịch sử chat của khách thuê.
 
@@ -35,14 +35,14 @@ sequenceDiagram
     participant Nest as NestJS Backend (Port 3000)
     participant Fast as FastAPI AI Engine (Port 8000)
     participant Qdrant as Qdrant Vector DB
-    participant Gemini as Gemini 2.5 Flash
+    participant Gemini as Gemini 3.1 Flash
     participant Redis as Redis Streams
 
     Tenant->>Nest: Gửi tin nhắn (Text/Voice Audio)
     Note over Nest: Lưu chat history vào PostgreSQL<br/>Xử lý nhanh Webhook tránh FB timeout
-    Nest->>Fast: POST /api/v1/search (query, history, audio_url)
+    Nest->>Fast: POST /api/search (query, history, audio_url)
     
-    Note over Fast: gemini-2.5-flash phân tích Intent & trích xuất Constraints
+    Note over Fast: gemini-3.1-flash-lite phân tích Intent & trích xuất Constraints
     Fast->>Qdrant: Hybrid Search (Semantic Vector + Hard Price Filters)
     Qdrant-->>Fast: Trả về Top 3 Listings (Listing IDs + Metadata)
     
@@ -90,11 +90,9 @@ Dữ liệu để nạp vào Qdrant Vector DB và thực hiện tìm kiếm ng�
 >   "listing_id": "Listing.id",
 >   "title": "Listing.title",
 >   "description": "Listing.description",
->   "price_per_month": "Listing.pricePerMonth",
->   "room_number": "Apartment.roomNumber",
+>   "pricePerMonth": "Listing.pricePerMonth",
+>   "roomNumber": "Apartment.roomNumber",
 >   "area": "Apartment.area",
->   "owner_name": "User.fullName",
->   "primary_image": "ListingImages.imageUrl (isPrimary=true)",
 >   "amenities": ["Amenities.amenitiesName của Apartment tương ứng"],
 >   "search_vector_text": "Tiêu đề: [title]. Mô tả: [description]. Phòng số: [roomNumber], tầng [floor], diện tích [area] m2. Tiện ích: [danh sách amenitiesName]. Ghi chú thêm: [note]."
 > }
@@ -121,9 +119,9 @@ class SearchQueryInput(BaseModel):
 class RecommendedListing(BaseModel):
     listing_id: str = Field(..., description="ID của tin đăng khớp từ Qdrant")
     title: str = Field(..., description="Tiêu đề căn hộ")
-    price_per_month: float = Field(..., description="Giá thuê mỗi tháng (VND)")
-    image_url: Optional[str] = Field(None, description="Ảnh đại diện chính của căn hộ")
-    room_number: str = Field(..., description="Mã số phòng")
+    pricePerMonth: float = Field(..., description="Giá thuê mỗi tháng (VND)")
+    imageUrl: Optional[str] = Field(None, description="Ảnh đại diện chính của căn hộ")
+    roomNumber: str = Field(..., description="Mã số phòng")
     area: float = Field(..., description="Diện tích căn hộ (m2)")
     reason: str = Field(..., description="Lập luận thuyết phục tại sao căn này hợp với nhu cầu và các ràng buộc của khách")
 
@@ -134,7 +132,7 @@ class SearchResponseOutput(BaseModel):
     booking_details: Optional[dict] = Field(None, description="Thông tin đặt lịch chốt xem phòng (listing_id, date, time) nếu có")
 ```
 
-### 2. Prompt System thiết kế cho `gemini-2.5-flash` (`app/prompts/prompt_broker.py`)
+### 2. Prompt System thiết kế cho `gemini-3.1-flash-lite` (`app/prompts/prompt_broker.py`)
 ```python
 SYSTEM_INSTRUCTION = """
 Bạn là "Super Broker" - Trợ lý Tìm kiếm & Tư vấn Căn hộ siêu cấp, hoạt động chuyên nghiệp, tận tâm và thông minh tuyệt đối.
@@ -165,7 +163,7 @@ HƯỚNG DẪN HÀNH VI:
 
 | Mã | Quyết định thiết kế | Phương án thay thế cân nhắc | Lý do chọn |
 |---|---|---|---|
-| **D2.1** | Sử dụng **gemini-2.5-flash** làm LLM chính | gemini-1.5-flash, GPT-4o-mini | gemini-2.5-flash tối ưu tốc độ vượt trội, xử lý đa phương thức (audio) nguyên bản cực tốt và giá cả cực kỳ tối ưu cho vận hành thương mại. |
+| **D2.1** | Sử dụng **gemini-3.1-flash-lite** làm LLM chính | gemini-1.5-flash, GPT-4o-mini | gemini-3.1-flash-lite tối ưu tốc độ vượt trội, xử lý đa phương thức (audio) nguyên bản cực tốt và giá cả cực kỳ tối ưu cho vận hành thương mại. |
 | **D2.2** | Đồng bộ đặt lịch **bất đồng bộ qua Redis Streams** | Gọi trực tiếp Calendar API thời gian thực từ FastAPI | Tránh phụ thuộc thời gian phản hồi của Google API trong luồng chat. Đảm bảo an toàn bảo mật và giữ sự chủ động phê duyệt lịch cho Chủ nhà. |
 | **D2.3** | Kiến trúc Lai (NestJS tiếp nhận -> FastAPI xử lý AI) | FastAPI nhận trực tiếp webhook | Giữ cấu trúc monorepo gọn gàng. NestJS quản lý toàn bộ phiên (Session), Database PostgreSQL, và I/O hiệu quả. FastAPI đóng vai trò một Microservice AI chuyên biệt, tinh gọn. |
 

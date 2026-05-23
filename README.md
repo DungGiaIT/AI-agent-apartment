@@ -147,7 +147,7 @@ curl -X POST http://127.0.0.1:8000/api/verify-listing \
 | Công nghệ | Version | Mục đích |
 |---|---|---|
 | FastAPI | latest | Web framework |
-| Gemini AI | gemini-2.5-flash | LLM backend |
+| Gemini AI | gemini-3.1-flash-lite | LLM backend |
 | Instructor | latest | Structured outputs |
 | Pydantic v2 | ≥2.0 | Data validation |
 | pytest-asyncio | latest | Async testing |

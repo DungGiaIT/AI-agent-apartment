@@ -41,9 +41,9 @@ async def verify_listing_endpoint(payload: rawListingInput) -> verifyListingResp
                 "owner_id": payload.owner_id,
                 "title": result.listing.title,
                 "description": result.listing.description,
-                "price": result.listing.price_per_month,
+                "price": result.listing.pricePerMonth,
                 "area": result.apartment_meta.area_m2,
-                "room_number": result.apartment_meta.room_number,
+                "roomNumber": result.apartment_meta.roomNumber,
                 "metadata": result.model_dump_json()
             }
             emit_event("listing.approved", event_payload)
