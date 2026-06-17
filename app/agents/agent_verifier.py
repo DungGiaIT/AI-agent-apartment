@@ -55,7 +55,7 @@ def build_instructor_client() -> instructor.Instructor:
     )
 
 
-def image_url_for_api(img: rawListingImageInput) -> str:
+def imageUrl_for_api(img: rawListingImageInput) -> str:
     b64_val = (img.base64_data or "").strip()
     url_val = (img.url or "").strip()
 
@@ -86,7 +86,7 @@ def build_user_content_parts(
     text_block: str,
     images: list[rawListingImageInput],
 ) -> str | list[dict[str, Any]]:
-    """OpenAI-compatible multimodal: text + image_url parts for Gemini."""
+    """OpenAI-compatible multimodal: text + imageUrl parts for Gemini."""
     slice_ = images[:_MAX_IMAGES]
     if not slice_:
         return text_block
@@ -95,9 +95,9 @@ def build_user_content_parts(
     for img in slice_:
         parts.append(
             {
-                "type": "image_url",
-                "image_url": {"url": image_url_for_api(img)},
-            }
+            "type": "image_url",
+            "image_url": {"url": imageUrl_for_api(img)}, 
+        }
         )
     return parts
 
@@ -167,7 +167,7 @@ DỮ LIỆU TỪ DATABASE (để đối soát):
 ID: {payload.db_apartment_data.get('id')}
 Diện tích: {payload.db_apartment_data.get('area')} m²
 Tầng: {payload.db_apartment_data.get('floor')}
-Số phòng: {payload.db_apartment_data.get('room_number')}
+Số phòng: {payload.db_apartment_data.get('roomNumber')}
 Ghi chú: {payload.db_apartment_data.get('note')}
 ---
 

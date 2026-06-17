@@ -8,7 +8,7 @@ Agent 2 serves as a **Semantic Context & Conversational Search Assistant** opera
 
 ## 📐 Architecture & System Flow
 
-Agent 2 interfaces with Qdrant for semantic vector search, utilizes `gemini-2.5-flash` for high-fidelity cognitive reasoning/constraints parsing, and coordinates with NestJS asynchronously via **Redis Streams**.
+Agent 2 interfaces with Qdrant for semantic vector search, utilizes `gemini-3.1-flash-lite` for high-fidelity cognitive reasoning/constraints parsing, and coordinates with NestJS asynchronously via **Redis Streams**.
 
 ```mermaid
 sequenceDiagram
@@ -22,9 +22,9 @@ sequenceDiagram
 
     Tenant->>Nest: Gửi tin nhắn (Text/Voice Audio)
     Note over Nest: Lưu chat history vào PostgreSQL<br/>Xử lý nhanh Webhook tránh FB timeout
-    Nest->>Fast: POST /api/v1/search (query, history, audio_url)
+    Nest->>Fast: POST /api/search (query, history, audio_url)
     
-    Note over Fast: gemini-2.5-flash phân tích Intent & trích xuất Constraints
+    Note over Fast: gemini-3.1-flash-lite phân tích Intent & trích xuất Constraints
     Fast->>Qdrant: Hybrid Search (Semantic Vector + Hard Price Filters)
     Qdrant-->>Fast: Trả về Top 3 Listings (Listing IDs + Metadata)
     
@@ -75,7 +75,7 @@ D:\fastapi-ai-engine\
 ### 1️⃣ Core Services & Background Indexing Consumer
 
 #### [MODIFY] [qdrant_service.py](file:///D:/fastapi-ai-engine/app/services/qdrant_service.py)
-*   **Embeddings Generation:** Add `get_embedding(text: str) -> list[float]` using the Google GenAI API (`text-embedding-004`).
+*   **Embeddings Generation:** Add `get_embedding(text: str) -> list[float]` using the Google GenAI API (`gemini-embedding-001`).
 *   **Upsert Point:** Add `upsert_apartment_vector(listing_data: dict)` to index listing data into the `apartments` collection. Use a deterministic UUID (hashed from `listing_id`) as the point ID to guarantee idempotency.
 *   **Vector Search:** Add `search_apartments(vector: list[float], filter_queries: Optional[dict] = None) -> list[dict]` to query Qdrant with semantic vector similarity and runtime constraint filters (price, area, amenities).
 
@@ -83,7 +83,7 @@ D:\fastapi-ai-engine\
 *   **Consumer Worker:** A background Thread/Task that runs alongside FastAPI.
 *   **Stream Consumption:** Reads from the `listing.approved` Redis Stream.
 *   **Replay Capacity:** On startup, reads from `0-0` to synchronize historical approved listings into Qdrant, then polls for fresh messages (`$`).
-*   **Handler:** Extracts `listing_id`, `title`, `description`, `price`, `area`, `room_number`, and `metadata` from the stream message, constructs the payload vector using `get_embedding`, and upserts into Qdrant.
+*   **Handler:** Extracts `listing_id`, `title`, `description`, `price`, `area`, `roomNumber`, and `metadata` from the stream message, constructs the payload vector using `get_embedding`, and upserts into Qdrant.
 
 ---
 
@@ -93,7 +93,7 @@ D:\fastapi-ai-engine\
 Implements all request and response structures as approved in `agent_broker_design.md`:
 *   `ChatMessage`: role (`user`, `assistant`), content.
 *   `SearchQueryInput`: `query`, `tenant_id`, `conversation_history`, and optional `audio_url`.
-*   `RecommendedListing`: `listing_id`, `title`, `price_per_month`, `image_url`, `room_number`, `area`, `reason`.
+*   `RecommendedListing`: `listing_id`, `title`, `pricePerMonth`, `imageUrl`, `roomNumber`, `area`, `reason`.
 *   `SearchResponseOutput`: `bot_response`, `recommendations`, `next_action`, `booking_details`.
 *   Internal schemas like `QueryIntentConstraints` to parse user queries cleanly (price budget, min area, semantic query, booking request).
 
@@ -107,13 +107,13 @@ Implements all request and response structures as approved in `agent_broker_desi
 
 #### [NEW] [agent_broker.py](file:///D:/fastapi-ai-engine/app/agents/agent_broker.py)
 Implements the core two-stage AI search pipeline:
-*   **Stage 1 (Intent Analysis):** Calls `gemini-2.5-flash` with the user query, audio data (if `audio_url` is present, it fetches and attaches audio binary to Gemini), and history to extract constraints into a structured model.
+*   **Stage 1 (Intent Analysis):** Calls `gemini-3.1-flash-lite` with the user query, audio data (if `audio_url` is present, it fetches and attaches audio binary to Gemini), and history to extract constraints into a structured model.
 *   **Stage 2 (Hybrid Vector Search):** Embeds the semantic query and searches Qdrant with filters. If zero matches are found, it invokes a **Constraint Relaxation** fallback (e.g. stripping price filters or minor amenities) to still present matches.
 *   **Stage 3 (RAG & Synthesis):** Submits user query + retrieved listing metadata + chat history to Gemini to generate the final `SearchResponseOutput`.
 *   **Booking Handler:** If an appointment is confirmed (`next_action` == `EMIT_BOOKING_EVENT`), it emits the `appointment.requested` event to Redis Streams.
 
 #### [NEW] [route_broker.py](file:///D:/fastapi-ai-engine/app/api/routes/route_broker.py)
-*   Exposes `POST /api/v1/search` pointing to `agent_broker.py`.
+*   Exposes `POST /api/search` pointing to `agent_broker.py`.
 *   Includes robust error handling (`RateLimitError`, `PermissionDeniedError`, etc.) matching standard patterns in `route_verifier.py`.
 
 #### [MODIFY] [main.py](file:///D:/fastapi-ai-engine/app/main.py)
@@ -126,7 +126,7 @@ Implements the core two-stage AI search pipeline:
 
 We assume:
 1. **Google GenAI OpenAI Compatibility:** The OpenAI-compatible API endpoint `/v1beta/openai` or direct REST API handles both chat completions and embeddings generation. We will build a fallback HTTP client for embeddings to guarantee safety.
-2. **Audio Multimodality:** If the user supplies `audio_url`, we assume it contains a readable format (mp3/wav/ogg) and we download and submit it as a raw part to `gemini-2.5-flash`.
+2. **Audio Multimodality:** If the user supplies `audio_url`, we assume it contains a readable format (mp3/wav/ogg) and we download and submit it as a raw part to `gemini-3.1-flash-lite`.
 3. **Redis / Qdrant Availability:** The local Docker container dependencies (Redis & Qdrant) are up and configured correctly.
 
 ---
@@ -138,7 +138,7 @@ We assume:
    *   Test embedding generation & Qdrant upsert/search logic in `app/tests/test_qdrant.py`.
    *   Test intent analysis & constraint parsing in `app/tests/test_agent_broker.py`.
 2. **Integration & API Tests:**
-   *   Run end-to-end FastAPI endpoint tests: `POST /api/v1/search` with text query and conversation history.
+   *   Run end-to-end FastAPI endpoint tests: `POST /api/search` with text query and conversation history.
    *   Test background indexing consumer by publishing an event to `listing.approved` via Redis CLI/Python script and verifying it gets upserted into Qdrant.
 
 ### Manual Verification

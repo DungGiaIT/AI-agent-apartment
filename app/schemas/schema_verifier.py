@@ -65,7 +65,7 @@ class rawListingInput(BaseModel):
 class listingCoreOutput(BaseModel):
     title: str = Field(..., min_length=10, max_length=100)
     description: str = Field(..., min_length=100)
-    price_per_month: Optional[float] = Field(None, gt=0)
+    pricePerMonth: Optional[float] = Field(None, gt=0)
     status: listingStatus
 
 
@@ -77,7 +77,7 @@ class amenityItem(BaseModel):
 class apartmentMetaOutput(BaseModel):
     area_m2: Optional[float] = Field(None, gt=0)
     floor: Optional[int] = Field(None, ge=1)
-    room_number: Optional[str] = None
+    roomNumber: Optional[str] = None
     note: Optional[str] = None
     amenities: list[amenityItem] = Field(default_factory=list)
 
